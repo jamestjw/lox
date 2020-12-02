@@ -44,16 +44,27 @@ public class Lox {
 
     public static void run(String code) {
         Scanner scanner = new Scanner(code);
-        List<Token> tokens = scanner.scanTokens();
+        List<Token> tokens = scanner.scanTokens();  
 
-        // For now we just print the tokens
-        for (Token token: tokens) {
-            System.out.println(token);
-        }
+        Parser parser = new Parser(tokens);
+        Expr expr = parser.parse();
+
+        // Stop if there was a syntax error.
+        if (hadError) return;
+
+        System.out.println(new AstPrinter().print(expr));
     }
 
     static void error(int line, String message) {
         report(line, "", message);
+    }
+
+    static void error(Token token, String message) {
+        if (token.type == TokenType.EOF) {
+            report(token.line, " at end", message);
+        } else {
+            report(token.line, String.format(" at '%s'", token.lexeme), message);
+        }
     }
 
     private static void report(int line, String where, String message) {
