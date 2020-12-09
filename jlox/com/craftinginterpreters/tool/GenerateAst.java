@@ -20,7 +20,9 @@ public class GenerateAst {
             "Literal   : Object value",
             "Unary     : Token operator, Expr right",
             "Variable  : Token name",
-            "Logical   : Expr left, Token operator, Expr right"
+            "Logical   : Expr left, Token operator, Expr right",
+            // For function calls, we need the token of the closing paren for error reporting
+            "Call      : Expr callee, Token paren, List<Expr> arguments"
         ));
 
         defineAst(outputDir, "Stmt", Arrays.asList(
@@ -29,7 +31,10 @@ public class GenerateAst {
             "Print       : Expr expression",
             "Var         : Token name, Expr initializer",
             "Block       : List<Stmt> statements",
-            "While       : Expr condition, Stmt body"
+            "While       : Expr condition, Stmt body",
+            "Function    : Token name, List<Token> params, List<Stmt> body",
+            // We need the return Token in order when we print errors
+            "Return      : Token keyword, Expr value"
         ));
     }
 
