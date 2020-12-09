@@ -6,12 +6,15 @@ import com.craftinginterpreters.lox.Expr.Assign;
 import com.craftinginterpreters.lox.Expr.Binary;
 import com.craftinginterpreters.lox.Expr.Grouping;
 import com.craftinginterpreters.lox.Expr.Literal;
+import com.craftinginterpreters.lox.Expr.Logical;
 import com.craftinginterpreters.lox.Expr.Unary;
 import com.craftinginterpreters.lox.Expr.Variable;
 import com.craftinginterpreters.lox.Stmt.Block;
 import com.craftinginterpreters.lox.Stmt.Expression;
+import com.craftinginterpreters.lox.Stmt.If;
 import com.craftinginterpreters.lox.Stmt.Print;
 import com.craftinginterpreters.lox.Stmt.Var;
+import com.craftinginterpreters.lox.Stmt.While;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     private Environment environment = new Environment();
@@ -199,11 +202,44 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         try {
             this.environment = environment;
 
-            for (Stmt statement: statements) {
+            for (Stmt statement : statements) {
                 execute(statement);
             }
         } finally {
             this.environment = previous;
         }
+    }
+
+    @Override
+    public Object visitIfStmt(If stmt) {
+        if (isTruthy(stmt.condition)) {
+            execute(stmt.thenBranch);
+        } else if (stmt.elseBranch != null) {
+            execute(stmt.elseBranch);
+        }
+        return null;
+    }
+
+    @Override
+    public Object visitLogicalExpr(Logical expr) {
+        Object left = evaluate(expr.left);
+
+        if (expr.operator.type == TokenType.OR) {
+            if (isTruthy(left))
+                return left;
+        } else {
+            if (!isTruthy(left))
+                return left;
+        }
+
+        return evaluate(expr.left);
+    }
+
+    @Override
+    public Object visitWhileStmt(While stmt) {
+        while (isTruthy(evaluate(stmt.condition))) {
+            execute(stmt.body);
+        }
+        return null;
     }
 }
