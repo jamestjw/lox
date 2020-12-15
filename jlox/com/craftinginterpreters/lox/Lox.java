@@ -55,6 +55,12 @@ public class Lox {
         // Stop if there was a syntax error.
         if (hadError) return;
 
+        Resolver resolver = new Resolver(interpreter);
+        resolver.resolve(statements);
+
+        // Stop if there was a resolution error.
+        if (hadError) return;
+
         interpreter.interpret(statements);
     }
 
@@ -66,7 +72,7 @@ public class Lox {
         if (token.type == TokenType.EOF) {
             report(token.line, "at end", message);
         } else {
-            report(token.line, String.format(" at '%s'", token.lexeme), message);
+            report(token.line, String.format("at '%s'", token.lexeme), message);
         }
     }
 
