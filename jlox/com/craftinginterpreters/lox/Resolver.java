@@ -8,12 +8,16 @@ import java.util.Stack;
 import com.craftinginterpreters.lox.Expr.Assign;
 import com.craftinginterpreters.lox.Expr.Binary;
 import com.craftinginterpreters.lox.Expr.Call;
+import com.craftinginterpreters.lox.Expr.Get;
 import com.craftinginterpreters.lox.Expr.Grouping;
 import com.craftinginterpreters.lox.Expr.Literal;
 import com.craftinginterpreters.lox.Expr.Logical;
+import com.craftinginterpreters.lox.Expr.Set;
+import com.craftinginterpreters.lox.Expr.This;
 import com.craftinginterpreters.lox.Expr.Unary;
 import com.craftinginterpreters.lox.Expr.Variable;
 import com.craftinginterpreters.lox.Stmt.Block;
+import com.craftinginterpreters.lox.Stmt.Class;
 import com.craftinginterpreters.lox.Stmt.Expression;
 import com.craftinginterpreters.lox.Stmt.Function;
 import com.craftinginterpreters.lox.Stmt.If;
@@ -26,14 +30,18 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private final Interpreter interpreter;
     private final Stack<Map<String, Boolean>> scopes = new Stack<>();
     private FunctionType currentFunction = FunctionType.NONE;
+    private ClassType currentClass = ClassType.NONE;
 
     Resolver(Interpreter interpreter) {
         this.interpreter = interpreter;
     }
 
     private enum FunctionType {
-        NONE,
-        FUNCTION
+        NONE, FUNCTION, METHOD, INITIALIZER
+    }
+
+    private enum ClassType {
+        NONE, CLASS
     }
 
     @Override
@@ -47,7 +55,8 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         resolve(stmt.condition);
         resolve(stmt.thenBranch);
 
-        if (stmt.elseBranch != null) resolve(stmt.elseBranch);
+        if (stmt.elseBranch != null)
+            resolve(stmt.elseBranch);
         return null;
     }
 
@@ -95,11 +104,15 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     @Override
     public Void visitReturnStmt(Return stmt) {
-        if (currentFunction != FunctionType.FUNCTION) {
+        // Check if the return statement is within a function or a method
+        if (currentFunction == FunctionType.NONE) {
             Lox.error(stmt.keyword, "Can't return from top-level code.");
         }
 
         if (stmt.value != null) {
+            if (currentFunction == FunctionType.INITIALIZER) {
+                Lox.error(stmt.keyword, "Can't return from an initializer.");
+            }
             resolve(stmt.value);
         }
 
@@ -133,7 +146,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     @Override
     public Void visitUnaryExpr(Unary expr) {
-        resolve(expr.right);        
+        resolve(expr.right);
         return null;
     }
 
@@ -144,7 +157,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
 
         resolveLocal(expr, expr.name);
-        
+
         return null;
     }
 
@@ -158,14 +171,66 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     @Override
     public Void visitCallExpr(Call expr) {
         resolve(expr.callee);
-        for (Expr argument: expr.arguments) {
+        for (Expr argument : expr.arguments) {
             resolve(argument);
         }
         return null;
     }
 
+    @Override
+    public Void visitClassStmt(Class stmt) {
+        ClassType enclosingClass = currentClass;
+        currentClass = ClassType.CLASS;
+
+        declare(stmt.name);
+        define(stmt.name);
+
+        beginScope();
+        scopes.peek().put("this", true);
+
+        for (Stmt.Function method : stmt.methods) {
+            FunctionType declaration = FunctionType.METHOD;
+            if (method.name.lexeme.equals("init")) {
+                declaration = FunctionType.INITIALIZER;
+            }
+            resolveFunction(method, declaration);
+        }
+
+        endScope();
+
+        currentClass = enclosingClass;
+        return null;
+    }
+
+    // Since properties are looked up dynamically, we cannot resolve them.
+    @Override
+    public Void visitGetExpr(Get expr) {
+        resolve(expr.object);
+        return null;
+    }
+
+    // Since properties are looked up dynamically, we just resolve the value and
+    // the object
+    @Override
+    public Void visitSetExpr(Set expr) {
+        resolve(expr.value);
+        resolve(expr.object);
+        return null;
+    }
+
+    @Override
+    public Void visitThisExpr(This expr) {
+        if (currentClass == ClassType.NONE) {
+            Lox.error(expr.keyword, "Can't use 'this' outside of a class.");
+            return null;
+        }
+
+        resolveLocal(expr, expr.keyword);
+        return null;
+    }
+
     void resolve(List<Stmt> statements) {
-        for (Stmt statement: statements) {
+        for (Stmt statement : statements) {
             resolve(statement);
         }
     }
@@ -181,20 +246,22 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     private void beginScope() {
         scopes.push(new HashMap<String, Boolean>());
     }
-        
+
     private void endScope() {
         scopes.pop();
     }
 
     private void define(Token name) {
-        if (scopes.isEmpty()) return;
+        if (scopes.isEmpty())
+            return;
 
         // Mark it as fully initialized and ready for use.
         scopes.peek().put(name.lexeme, true);
     }
 
     private void declare(Token name) {
-        if (scopes.isEmpty()) return;
+        if (scopes.isEmpty())
+            return;
         Map<String, Boolean> scope = scopes.peek();
 
         // Throw an error if the user declares the same variable
@@ -231,7 +298,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         currentFunction = type;
 
         beginScope();
-        for(Token param: stmt.params) {
+        for (Token param : stmt.params) {
             declare(param);
             define(param);
         }
