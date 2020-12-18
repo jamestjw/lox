@@ -25,7 +25,8 @@ public class GenerateAst {
             "Call      : Expr callee, Token paren, List<Expr> arguments",
             "Get       : Expr object, Token name",
             "Set       : Expr object, Token name, Expr value",
-            "This      : Token keyword"
+            "This      : Token keyword",
+            "Super     : Token keyword, Token method"
         ));
 
         defineAst(outputDir, "Stmt", Arrays.asList(
@@ -36,7 +37,7 @@ public class GenerateAst {
             "Block       : List<Stmt> statements",
             "While       : Expr condition, Stmt body",
             "Function    : Token name, List<Token> params, List<Stmt> body",
-            "Class       : Token name, List<Stmt.Function> methods",
+            "Class       : Token name, Expr.Variable superclass, List<Stmt.Function> methods",
             // We need the return Token in order when we print errors
             "Return      : Token keyword, Expr value"
         ));
