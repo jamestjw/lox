@@ -8,8 +8,16 @@
 // variable lookup etc
 typedef enum {
   OP_CONSTANT,
+  // Negates a numerical value
+  OP_NEGATE,
   // Return from current function
   OP_RETURN,
+
+  // Arithmetic,
+  OP_ADD,
+  OP_SUBTRACT,
+  OP_MULTIPLY,
+  OP_DIVIDE,
 } OpCode;
 
 typedef struct {
