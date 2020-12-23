@@ -4,4 +4,4 @@
 More details in the README in the `jlox` directory.
 
 ### C version
-To be implemented
+More details in the README in the `clox` directory.
