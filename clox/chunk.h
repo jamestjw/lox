@@ -8,10 +8,21 @@
 // variable lookup etc
 typedef enum {
   OP_CONSTANT,
+  // Special literals
+  OP_NIL,
+  OP_TRUE,
+  OP_FALSE,
+  // Negates a boolean
+  OP_NOT,
   // Negates a numerical value
   OP_NEGATE,
   // Return from current function
   OP_RETURN,
+
+  // Comparison operators
+  OP_GREATER,
+  OP_LESS,
+  OP_EQUAL,
 
   // Arithmetic,
   OP_ADD,
