@@ -18,6 +18,9 @@ typedef struct {
   // this way when the stack is empty stackTop would point
   // to the start of the array
   Value* stackTop;
+
+  // Head of a linked list of all objects allocated
+  Obj* objects;
 } VM;
 
 // Compiler reports static errors and VM detects runtime errors
@@ -26,6 +29,8 @@ typedef enum {
   INTERPRET_COMPILE_ERROR,
   INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
+
+extern VM vm;
 
 void initVM();
 void freeVM();
