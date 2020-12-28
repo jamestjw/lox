@@ -48,11 +48,9 @@ bool valuesEqual(Value a, Value b) {
     case VAL_BOOL: return AS_BOOL(a) == AS_BOOL(b);
     case VAL_NIL: return true; 
     case VAL_NUMBER: return AS_NUMBER(a) == AS_NUMBER(b);
-    case VAL_OBJ: {
-      ObjString* aString = AS_STRING(a);
-      ObjString* bString = AS_STRING(b);
-      return aString->length == bString->length && memcmp(aString->chars, bString->chars, aString->length) == 0;
-    }
+    // In the case where the objects are strings, since we have
+    // already interned all strings, we do not have to test the chars
+    case VAL_OBJ: return AS_OBJ(a) == AS_OBJ(b);
     default: return false;
   }
 }

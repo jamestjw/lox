@@ -2,6 +2,7 @@
 #define clox_vm_h
 
 #include "chunk.h"
+#include "table.h"
 #include "value.h"
 
 #define STACK_MAX 256
@@ -18,6 +19,9 @@ typedef struct {
   // this way when the stack is empty stackTop would point
   // to the start of the array
   Value* stackTop;
+
+  // A hash table to keep track of all interned strings
+  Table strings;
 
   // Head of a linked list of all objects allocated
   Obj* objects;
