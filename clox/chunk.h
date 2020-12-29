@@ -12,16 +12,22 @@ typedef enum {
   OP_NIL,
   OP_TRUE,
   OP_FALSE,
+  OP_POP,
   // Negates a boolean
   OP_NOT,
   // Negates a numerical value
   OP_NEGATE,
+  // Prints a value
+  OP_PRINT,
   // Return from current function
   OP_RETURN,
 
   // Comparison operators
   OP_GREATER,
   OP_LESS,
+  OP_DEFINE_GLOBAL,
+  OP_GET_GLOBAL,
+  OP_SET_GLOBAL,
   OP_EQUAL,
 
   // Arithmetic,

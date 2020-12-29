@@ -20,6 +20,9 @@ typedef struct {
   // to the start of the array
   Value* stackTop;
 
+  // Table of global variable names and values
+  Table globals;
+
   // A hash table to keep track of all interned strings
   Table strings;
 

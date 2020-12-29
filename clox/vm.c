@@ -37,10 +37,12 @@ static void runtimeError(const char* format, ...) {
 void initVM() {
   resetStack();
   vm.objects = NULL;
+  initTable(&vm.globals);
   initTable(&vm.strings);
 }
 
 void freeVM() {
+  freeTable(&vm.globals);
   freeTable(&vm.strings);
   freeObjects();
 }
@@ -84,8 +86,12 @@ static void concatenate() {
 static InterpretResult run() {
   // Return a byte instruction and advance the instruction pointer
   #define READ_BYTE() (*vm.ip++)
+
   // Return the next instruction as a constant (and advance the IP)
   #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+
+  #define READ_STRING() AS_STRING(READ_CONSTANT())
+
   // Using a do while here allows here to execute multiple lines off
   // code while supporting the use of semicolons at the end
   #define BINARY_OP(valueType, op) \
@@ -130,6 +136,38 @@ static InterpretResult run() {
       case OP_NIL: push(NIL_VAL); break;
       case OP_TRUE: push(BOOL_VAL(true)); break;
       case OP_FALSE: push(BOOL_VAL(false)); break;
+      case OP_POP: pop(); break;
+      case OP_GET_GLOBAL: {
+        ObjString* name = READ_STRING();
+        Value value;
+        if (!tableGet(&vm.globals, name, &value)) {
+          runtimeError("Undefined variable '%s'.", name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        push(value);
+        break;
+      }
+      case OP_DEFINE_GLOBAL: {
+        ObjString* name = READ_STRING();
+        tableSet(&vm.globals, name, peek(0));
+        pop();
+        break;
+      }
+      // Setting a variable doesn't pop the value off the stack
+      // since assignment is an expression (it could be nested
+      // within some larger expression)
+      case OP_SET_GLOBAL: {
+        ObjString* name = READ_STRING();
+        // If the key didn't already exist in the globals hash table,
+        // throw a runtime error since we do not support implicit
+        // variable declaration
+        if (tableSet(&vm.globals, name, peek(0))) {
+          tableDelete(&vm.globals, name);
+          runtimeError("Undefined variable '%s'.", name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
       case OP_EQUAL: {
         Value b = pop();
         Value a = pop();
@@ -164,17 +202,20 @@ static InterpretResult run() {
         }
         push(NUMBER_VAL(-AS_NUMBER(pop())));
         break;
-      case OP_RETURN: {
-        // TODO: Complete this implementation, for now we will pop the top value
-        // off the value stack and print it.
+      case OP_PRINT: {
         printValue(pop());
         printf("\n");
+        break;
+      }
+      case OP_RETURN: {
+        // Exit interpreter
         return INTERPRET_OK;
       }
     }
   }
   #undef READ_BYTE
   #undef READ_CONSTANT
+  #undef READ_STRING
   #undef BINARY_OP
 }
 
