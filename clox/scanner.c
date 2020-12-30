@@ -119,6 +119,7 @@ static void skipWhitespace() {
           // is absent.
           return;
         }
+        break;
       default:
         return;
     }

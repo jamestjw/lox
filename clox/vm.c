@@ -137,6 +137,15 @@ static InterpretResult run() {
       case OP_TRUE: push(BOOL_VAL(true)); break;
       case OP_FALSE: push(BOOL_VAL(false)); break;
       case OP_POP: pop(); break;
+      case OP_GET_LOCAL: {
+        // Might seem a little silly to push the same value
+        // that can be found somewhere below in the stack to
+        // the same stack again, but our instructions only know
+        // how to access values at the top of the stack
+        uint8_t slot = READ_BYTE();
+        push(vm.stack[slot]);
+        break;
+      }
       case OP_GET_GLOBAL: {
         ObjString* name = READ_STRING();
         Value value;
@@ -166,6 +175,13 @@ static InterpretResult run() {
           runtimeError("Undefined variable '%s'.", name->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
+        break;
+      }
+      case OP_SET_LOCAL: {
+        uint8_t slot = READ_BYTE();
+        // We do not pop the value since assigment is an
+        // expression (i.e. it produces a value always)
+        vm.stack[slot] = peek(0);
         break;
       }
       case OP_EQUAL: {
