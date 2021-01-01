@@ -19,6 +19,12 @@ typedef enum {
   OP_NEGATE,
   // Prints a value
   OP_PRINT,
+
+  OP_JUMP,
+  // Jumps a certain amount of code if the last value
+  // on the stack if false
+  OP_JUMP_IF_FALSE,
+  OP_LOOP,
   // Return from current function
   OP_RETURN,
 
