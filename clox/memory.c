@@ -26,6 +26,19 @@ static void freeObject(Obj* object) {
       FREE(ObjString, object);
       break;
     }
+    case OBJ_FUNCTION: {
+      // Note how we skip freeing the name object since
+      // the garbage collector will eventually handle it
+      // for us
+      ObjFunction* function = (ObjFunction*) object;
+      freeChunk(&function->chunk);
+      FREE(OBJ_FUNCTION, object);
+      break;
+    }
+    case OBJ_NATIVE: {
+      FREE(ObjNative, object);
+      break;
+    }
   }
 }
 

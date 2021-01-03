@@ -3,9 +3,10 @@
 
 #include "vm.h"
 
-// Returns a boolean to indicate the whether the
-// compilation was successful
-bool compile(const char* source, Chunk* chunk);
+// Returns a pointer to a ObjFunction if compilation was successful,
+// returns a null ptr otherwise (preventing the VM from trying to execute
+// a function with possibly invalid bytecode)
+ObjFunction* compile(const char* source);
 
 #endif
 

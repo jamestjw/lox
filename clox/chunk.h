@@ -25,6 +25,7 @@ typedef enum {
   // on the stack if false
   OP_JUMP_IF_FALSE,
   OP_LOOP,
+  OP_CALL,
   // Return from current function
   OP_RETURN,
 

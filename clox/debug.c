@@ -49,7 +49,7 @@ static int constantInstruction(const char* name, Chunk* chunk, int offset) {
 int disassembleInstruction(Chunk* chunk, int offset) {
   printf("%04d ", offset);
 
-  if (offset > 0 && chunk->lines[offset] == chunk->lines[offset -1 ]) {
+  if (offset > 0 && chunk->lines[offset] == chunk->lines[offset - 1]) {
     printf("   | ");
   } else {
     printf("%4d ", chunk->lines[offset]);
@@ -94,6 +94,8 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       return jumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
     case OP_LOOP:
       return jumpInstruction("OP_LOOP", -1, chunk, offset);
+    case OP_CALL:
+      return byteInstruction("OP_CALL", chunk, offset);
     case OP_RETURN:
       return simpleInstruction("OP_RETURN", offset);
     case OP_ADD:
