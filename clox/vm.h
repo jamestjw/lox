@@ -10,8 +10,8 @@
 
 // A callframe represents a single ongoing function call
 typedef struct {
-  // A pointer to the function that is being called
-  ObjFunction* function;
+  // A pointer to the closure that contains the fn that is being called
+  ObjClosure* closure;
   // Tracks the address that will be executed next, after returning
   // from a function call, the VM will jump to the ip of the caller's
   // CallFrame
@@ -38,6 +38,9 @@ typedef struct {
 
   // A hash table to keep track of all interned strings
   Table strings;
+
+  // Head of the sorted linked list of open upvalues
+  ObjUpvalue* openUpvalues;
 
   // Head of a linked list of all objects allocated
   Obj* objects;

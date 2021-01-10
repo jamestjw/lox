@@ -19,6 +19,17 @@ void* reallocate(void* pointer, size_t oldSize, size_t newSize) {
 
 static void freeObject(Obj* object) {
   switch (object->type) {
+    case OBJ_CLOSURE: {
+      // Closure does not own the function (multiple closures might
+      // reference the same function) and hence we do not clean up
+      // the function obj here
+      ObjClosure* closure = (ObjClosure*) object;
+      // Although closure does not own the upvalues, it owns the array
+      // of pointers and we need to free this
+      FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalueCount);
+      FREE(ObjClosure, object);
+      break;
+    }
     case OBJ_STRING: {
       ObjString* string = (ObjString*)object;
       // +1 to take into account the null termination char
@@ -37,6 +48,10 @@ static void freeObject(Obj* object) {
     }
     case OBJ_NATIVE: {
       FREE(ObjNative, object);
+      break;
+    }
+    case OBJ_UPVALUE: {
+      FREE(ObjUpvalue, object);
       break;
     }
   }

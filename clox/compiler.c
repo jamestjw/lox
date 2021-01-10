@@ -45,7 +45,14 @@ typedef struct {
   // This depth matches the scope depth of the block
   // where the local variable was declared
   int depth;
+  // Is this local captured by any later nested fn declaration
+  bool isCaptured;
 } Local;
+
+typedef struct {
+  uint8_t index;
+  bool isLocal;
+} Upvalue;
 
 typedef enum {
   TYPE_FUNCTION,
@@ -63,6 +70,9 @@ typedef struct Compiler {
   // of the compilation process
   Local locals[UINT8_COUNT];
   int localCount;
+
+  Upvalue upvalues[UINT8_COUNT];
+
   // Number blocks surrounding current bit of code we
   // are currently compiling.
   // Zero is the global scope, one is the first top-level block
@@ -247,6 +257,7 @@ static void initCompiler(Compiler* compiler, FunctionType type) {
   // object being called
   Local* local = &current->locals[current->localCount++];
   local->depth = 0;
+  local->isCaptured = false;
   // We give it the name of an empty string so that no user
   // written identifier can ever refer to it
   local->name.start = "";
@@ -281,10 +292,16 @@ static void endScope() {
   while(current->localCount > 0 &&
         current->locals[current->localCount - 1].depth >
            current->scopeDepth) {
-    // We pop a value from the stack and decrement the local count
-    // TODO: Possible optimisation is to emit an OP_POPN instruction
-    // to pop n values in one go
-    emitByte(OP_POP);
+    if (current->locals[current->localCount - 1].isCaptured) {
+      // If a variable has been captured, we emit the right instruction
+      // to transfer it to the heap
+      emitByte(OP_CLOSE_UPVALUE);
+    } else {
+      // We pop a value from the stack and decrement the local count
+      // TODO: Possible optimisation is to emit an OP_POPN instruction
+      // to pop n values in one go
+      emitByte(OP_POP);
+    }
     current->localCount--;
   }
 }
@@ -326,6 +343,57 @@ static int resolveLocal(Compiler* compiler, Token* name) {
   return -1;
 }
 
+static int addUpvalue(Compiler* compiler, uint8_t index, bool isLocal) {
+  int upvalueCount = compiler->function->upvalueCount;
+
+  // If the function already has an upvalue that closes over a particular variable
+  // we do not redefine it and instead just return the index to the upvalue within the 
+  // array
+  for (int i = 0; i < upvalueCount; i++) {
+    Upvalue * upvalue = &compiler->upvalues[i];
+    if (upvalue->index == index && upvalue->isLocal == isLocal) {
+      return i;
+    }
+  }
+
+  if (upvalueCount == UINT8_COUNT) {
+    error("Too many closure variables in function.");
+    return 0;
+  }
+
+  compiler->upvalues[upvalueCount].isLocal = isLocal;
+  compiler->upvalues[upvalueCount].index = index;
+  return compiler->function->upvalueCount++;
+}
+
+static int resolveUpvalue(Compiler* compiler, Token* name) {
+  // If enclosing compiler is null, we have reached the outermost
+  // function without finding a local var of this name, hence it must be
+  // global and we return -1 (if such a global variable does not exist,
+  // then the error will be thrown during runtime)
+  if (compiler->enclosing == NULL) return -1;
+
+  // Try to resolve the identifier as a local variable in the
+  // enclosing compiler, i.e. right outside the current function
+  int local = resolveLocal(compiler->enclosing, name);
+  if (local != -1) {
+    // If a particular local variable is used to create an upvalue
+    // we mark it as captured
+    compiler->enclosing->locals[local].isCaptured = true;
+    return addUpvalue(compiler, (uint8_t) local, true);
+  }
+  
+  // Suppose that we haven't found the variable yet, we try
+  // to match a local variable in an enclosing function, creating
+  // an upvalue there if necessary
+  int upvalue = resolveUpvalue(compiler->enclosing, name);
+  if (upvalue != -1) {
+    return addUpvalue(compiler, (uint8_t) upvalue, false);
+  }
+
+  return -1;
+}
+
 // Records the existence of a local variable with this name, while
 // incrementing the localCount in the compiler struct
 static void addLocal(Token name) {
@@ -335,6 +403,7 @@ static void addLocal(Token name) {
   }
   Local* local = &current->locals[current->localCount++];
   local->name = name;
+  local->isCaptured = false;
 
   // Use -1 to signal that this variable has not be initialized
   local->depth = -1;
@@ -498,7 +567,7 @@ static void function(FunctionType type) {
     do {
       current->function->arity++;
       if (current->function->arity > 255) {
-        errorAtCurrent("Can't have more than  255 parameters.");
+        errorAtCurrent("Can't have more than 255 parameters.");
       }
 
       uint8_t paramConstant = parseVariable("Expect parameter name.");
@@ -515,7 +584,12 @@ static void function(FunctionType type) {
   // Note how there is no need to end scope and jump back out
   // to a lower depth
   ObjFunction* function = endCompiler();
-  emitBytes(OP_CONSTANT, makeConstant(OBJ_VAL(function)));
+  emitBytes(OP_CLOSURE, makeConstant(OBJ_VAL(function)));
+
+  for (int i = 0; i < function->upvalueCount; i++) {
+    emitByte(compiler.upvalues[i].isLocal ? 1 : 0);
+    emitByte(compiler.upvalues[i].index);
+  }
 }
 
 static void funDeclaration() {
@@ -779,6 +853,9 @@ static void namedVariable(Token name, bool canAssign) {
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
+  } else if ((arg = resolveUpvalue(current, &name)) != -1) {
+    getOp = OP_GET_UPVALUE;
+    setOp = OP_SET_UPVALUE;
   } else {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;

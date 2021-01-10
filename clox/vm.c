@@ -22,6 +22,7 @@ static Value clockNative(int argCount, Value* args) {
 static void resetStack() {
   vm.stackTop = vm.stack;
   vm.frameCount = 0;
+  vm.openUpvalues = NULL;
 }
 
 static void runtimeError(const char* format, ...) {
@@ -33,7 +34,7 @@ static void runtimeError(const char* format, ...) {
 
   for (int i = vm.frameCount - 1; i >= 0; i--) {
     CallFrame* frame = &vm.frames[i];
-    ObjFunction* function = frame->function;
+    ObjFunction* function = frame->closure->function;
 
     // -1 since IP points to the next instruction to execute
     size_t instruction = frame->ip - function->chunk.code - 1;
@@ -91,9 +92,9 @@ static Value peek(int distance) {
   return vm.stackTop[-1 -distance];
 }
 
-static bool call(ObjFunction* function, int argCount) {
-  if (argCount != function->arity) {
-    runtimeError("Expected %d arguments but got %d.", function->arity, argCount);
+static bool call(ObjClosure* closure, int argCount) {
+  if (argCount != closure->function->arity) {
+    runtimeError("Expected %d arguments but got %d.", closure->function->arity, argCount);
     return false;
   }
   
@@ -103,10 +104,10 @@ static bool call(ObjFunction* function, int argCount) {
   }
 
   CallFrame* frame = &vm.frames[vm.frameCount++];
-  frame->function = function;
+  frame->closure = closure;
   // Point the frame's ip to the beginning of the function's
   // bytecode
-  frame->ip = function->chunk.code;
+  frame->ip = closure->function->chunk.code;
 
   // First slot is reserved for the function itself, which
   // is why we need a -1 here
@@ -117,8 +118,8 @@ static bool call(ObjFunction* function, int argCount) {
 static bool callValue(Value callee, int argCount) {
   if (IS_OBJ(callee)) {
     switch(OBJ_TYPE(callee)) {
-      case OBJ_FUNCTION:
-        return call(AS_FUNCTION(callee), argCount);
+      case OBJ_CLOSURE:
+        return call(AS_CLOSURE(callee), argCount);
       case OBJ_NATIVE: {
         NativeFn native = AS_NATIVE(callee);
         Value result = native(argCount, vm.stackTop - argCount);
@@ -136,6 +137,50 @@ static bool callValue(Value callee, int argCount) {
 
   runtimeError("Can only call functions and classes.");
   return false;
+}
+
+static ObjUpvalue* captureUpvalue(Value* local) {
+  ObjUpvalue* prevUpvalue = NULL;
+  ObjUpvalue* upvalue = vm.openUpvalues;
+
+  while (upvalue != NULL && upvalue->location > local) {
+    prevUpvalue = upvalue;
+    upvalue = upvalue->next;
+  }
+
+  // If there is an existing upvalue that is the one
+  // we are searching for
+  if (upvalue != NULL && upvalue->location == local) {
+    return upvalue;
+  }
+
+  ObjUpvalue* createdUpvalue = newUpvalue(local);
+
+  // Note how here upvalue is definitely in a slot lower than where
+  // we want to place the newly created upvalue, and prevUpvalue should
+  // be one slot above where we want to place our new value
+  createdUpvalue->next = upvalue;
+
+  if (prevUpvalue == NULL) {
+    vm.openUpvalues = createdUpvalue;
+  } else {
+    prevUpvalue->next = createdUpvalue;
+  }
+  return createdUpvalue;
+}
+
+// Given a pointer to a stack slot, this closes all open
+// upvalues that point to that slot or above it on the stack
+static void closeUpvalues(Value* last) {
+  while (vm.openUpvalues != NULL && vm.openUpvalues->location >= last) {
+    ObjUpvalue* upvalue = vm.openUpvalues;
+    // We simply make the Upvalue own the value of the closed upvalue
+    upvalue->closed = *upvalue->location;
+    // Here we quite simply point it to the copy of the value that is owned
+    // by the upvalue
+    upvalue->location = &upvalue->closed;
+    vm.openUpvalues = upvalue->next;
+  }
 }
 
 // nil and false are falsey, everything else is truthy
@@ -166,7 +211,7 @@ static InterpretResult run() {
   #define READ_BYTE() (*frame->ip++)
 
   // Return the next instruction as a constant (and advance the IP)
-  #define READ_CONSTANT() (frame->function->chunk.constants.values[READ_BYTE()])
+  #define READ_CONSTANT() (frame->closure->function->chunk.constants.values[READ_BYTE()])
 
   // Takes the next two bytes and constructs a 16bit unsigned int
   #define READ_SHORT() \
@@ -204,7 +249,7 @@ static InterpretResult run() {
     // By doing pointer arithmetic between the ptr to the next instruction
     // and the start of the instruction array, we get the offset of the 
     // next instruction to be executed
-    disassembleInstruction(&frame->function->chunk, (int) (frame->ip - frame->function->chunk.code));
+    disassembleInstruction(&frame->closure->function->chunk, (int) (frame->ip - frame->closure->function->chunk.code));
 #endif
 
     uint8_t instruction;
@@ -270,6 +315,16 @@ static InterpretResult run() {
         frame->slots[slot] = peek(0);
         break;
       }
+      case OP_GET_UPVALUE: {
+                             uint8_t slot = READ_BYTE();
+                             push(*frame->closure->upvalues[slot]->location);
+                             break;
+                           }
+      case OP_SET_UPVALUE: {
+                             uint8_t slot = READ_BYTE();
+                             *frame->closure->upvalues[slot]->location = peek(0);
+                             break;
+                           }
       case OP_EQUAL: {
         Value b = pop();
         Value a = pop();
@@ -334,10 +389,36 @@ static InterpretResult run() {
         frame = &vm.frames[vm.frameCount - 1];
         break;
       }
+      case OP_CLOSURE: {
+        ObjFunction* function = AS_FUNCTION(READ_CONSTANT());
+        ObjClosure* closure = newClosure(function);
+        push(OBJ_VAL(closure));
+
+        for (int i = 0; i < closure->upvalueCount; i++) {
+          uint8_t isLocal = READ_BYTE();
+          uint8_t index = READ_BYTE();
+          if (isLocal) {
+            closure->upvalues[i] = captureUpvalue(frame->slots + index);
+          } else {
+            // To note here that while we are still in the middle of defining
+            // this function, the current function in the frame is referring
+            // to the one that encloses the function that we are defining
+            closure->upvalues[i] = frame->closure->upvalues[index];
+          }
+        }
+        break;
+      }
+      case OP_CLOSE_UPVALUE:
+        closeUpvalues(vm.stackTop - 1);
+        pop();
+        break;
       case OP_RETURN: {
         // Function always returns a value, now that we intend to discard
         // the function's entire stack window, we pop the return value
         Value result = pop();
+
+        // Close all remaining open upvalues owned by the returning function
+        closeUpvalues(frame->slots);
 
         vm.frameCount--;
         // If we are done interpreting everything
@@ -369,7 +450,11 @@ InterpretResult interpret(const char* source) {
   // This is why the compiler reserves the first local slot for its
   // internal use, i.e. to store the implicit top level function
   push(OBJ_VAL(function));
-  callValue(OBJ_VAL(function), 0);
+  
+  ObjClosure* closure = newClosure(function);
+  pop();
+  push(OBJ_VAL(closure));
+  callValue(OBJ_VAL(closure), 0);
   
   return run();
 }
