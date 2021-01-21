@@ -42,8 +42,18 @@ typedef struct {
   // Head of the sorted linked list of open upvalues
   ObjUpvalue* openUpvalues;
 
+  // Track amount of memory allocated
+  size_t bytesAllocated;
+  // Threshold of memory allocation before next GC is necessary
+  size_t nextGC;
+
   // Head of a linked list of all objects allocated
   Obj* objects;
+
+  // Gray stack is a list of objects marked for GC
+  int grayCount;
+  int grayCapacity;
+  Obj** grayStack;
 } VM;
 
 // Compiler reports static errors and VM detects runtime errors

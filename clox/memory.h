@@ -23,6 +23,9 @@
 // If the old size is non zero and the new size is zero, free the allocation
 // If the old size is lesser than the new size, grow the allocation and vice versa.
 void *reallocate(void* pointer, size_t oldSize, size_t newSize);
+void markObject(Obj* object);
+void markValue(Value value);
+void collectGarbage();
 void freeObjects();
 
 #endif

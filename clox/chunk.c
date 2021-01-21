@@ -2,6 +2,7 @@
 
 #include "chunk.h"
 #include "memory.h"
+#include "vm.h"
 
 void initChunk(Chunk* chunk) {
   chunk->count = 0;
@@ -32,6 +33,11 @@ void freeChunk(Chunk* chunk) {
 }
 
 int addConstant(Chunk* chunk, Value value) {
+  // This little manoeuvre is to prevent the value from being
+  // GC-ed before it can be written to the table, since a 
+  // reallocation to expand the table capacity could occur
+  push(value);
   writeValueArray(&chunk->constants, value);
+  pop();
   return chunk->constants.count - 1;
 }

@@ -7,6 +7,7 @@
 // returns a null ptr otherwise (preventing the VM from trying to execute
 // a function with possibly invalid bytecode)
 ObjFunction* compile(const char* source);
+void markCompilerRoots();
 
 #endif
 
