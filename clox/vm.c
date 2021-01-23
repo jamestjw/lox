@@ -125,6 +125,14 @@ static bool call(ObjClosure* closure, int argCount) {
 static bool callValue(Value callee, int argCount) {
   if (IS_OBJ(callee)) {
     switch(OBJ_TYPE(callee)) {
+      case OBJ_CLASS: {
+        ObjClass* klass = AS_CLASS(callee);
+        // Top of the stack consists of the args followed by the class,
+        // after doing this and popping of all args, the new instance
+        // will be at the top of the stack
+        vm.stackTop[-argCount-1] = OBJ_VAL(newInstance(klass));
+        return true;
+      }
       case OBJ_CLOSURE:
         return call(AS_CLOSURE(callee), argCount);
       case OBJ_NATIVE: {
@@ -344,6 +352,44 @@ static InterpretResult run() {
         push(BOOL_VAL(valuesEqual(a, b)));
         break;
       }
+      case OP_GET_PROPERTY: {
+        // Instance should be at the top of stack when processing this OP 
+        if (!IS_INSTANCE(peek(0))) {
+          runtimeError("Only instances have properties.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ObjInstance* instance = AS_INSTANCE(peek(0));
+        ObjString* name = READ_STRING();
+
+        Value value;
+        if (tableGet(&instance->fields, name, &value)) {
+          pop(); // Pop the instance
+          push(value);
+          break;
+        }
+
+        // Accessing an undefined property is a runtime error
+        runtimeError("Undefined property '%s'.", name->chars);
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      case OP_SET_PROPERTY: { 
+        // Top of the stack is the value followed by the instance 
+        if (!IS_INSTANCE(peek(1))) {
+          runtimeError("Only instances have fields.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ObjInstance* instance = AS_INSTANCE(peek(1));
+        tableSet(&instance->fields, READ_STRING(), peek(0));
+
+        Value value = pop();
+        pop();
+
+        // Setting properties is an expression
+        push(value);
+        break;
+      }
       case OP_GREATER: BINARY_OP(BOOL_VAL, >); break;
       case OP_LESS: BINARY_OP(BOOL_VAL, <); break;
       // Arithmetic
@@ -447,6 +493,9 @@ static InterpretResult run() {
         frame = &vm.frames[vm.frameCount - 1];
         break;
       }
+      case OP_CLASS:
+        push(OBJ_VAL(newClass(READ_STRING())));
+        break;
     }
   }
   #undef READ_BYTE

@@ -87,6 +87,11 @@ static void blackenObject(Obj* object) {
   printf("\n");
 #endif
   switch (object->type) {
+    case OBJ_CLASS: {
+      ObjClass* klass = (ObjClass*)object;
+      markObject((Obj*)klass->name);
+      break;
+    }
     case OBJ_CLOSURE: {
       ObjClosure* closure = (ObjClosure*)object;
       markObject((Obj*)closure->function);
@@ -99,6 +104,14 @@ static void blackenObject(Obj* object) {
       ObjFunction* function = (ObjFunction*)object;
       markObject((Obj*)function->name);
       markArray(&function->chunk.constants);
+      break;
+    }
+    case OBJ_INSTANCE: {
+      ObjInstance* instance = (ObjInstance*)object;
+      // As long as the instance is alive, we should never
+      // deallocate its class
+      markObject((Obj*)instance->klass);
+      markTable(&instance->fields);
       break;
     }
     case OBJ_UPVALUE:
@@ -116,6 +129,10 @@ static void freeObject(Obj* object) {
 #endif
 
   switch (object->type) {
+    case OBJ_CLASS: {
+      FREE(ObjClass, object);
+      break;
+    }
     case OBJ_CLOSURE: {
       // Closure does not own the function (multiple closures might
       // reference the same function) and hence we do not clean up
@@ -141,6 +158,14 @@ static void freeObject(Obj* object) {
       ObjFunction* function = (ObjFunction*) object;
       freeChunk(&function->chunk);
       FREE(OBJ_FUNCTION, object);
+      break;
+    }
+    case OBJ_INSTANCE: {
+      ObjInstance* instance = (ObjInstance*)object;
+      // We do not handle the entries in the table, there could
+      // be other references to them, the GC will take care of them
+      freeTable(&instance->fields);
+      FREE(ObjInstance, object);
       break;
     }
     case OBJ_NATIVE: {
