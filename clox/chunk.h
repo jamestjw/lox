@@ -26,6 +26,8 @@ typedef enum {
   OP_JUMP_IF_FALSE,
   OP_LOOP,
   OP_CALL,
+  // Directly invoking a method on a call
+  OP_INVOKE,
   // Define a closure that is wrapped around a function
   OP_CLOSURE,
   OP_CLOSE_UPVALUE,
@@ -52,6 +54,7 @@ typedef enum {
   OP_MULTIPLY,
   OP_DIVIDE,
   OP_CLASS,
+  OP_METHOD,
 } OpCode;
 
 typedef struct {

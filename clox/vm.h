@@ -38,6 +38,9 @@ typedef struct {
 
   // A hash table to keep track of all interned strings
   Table strings;
+  
+  // Interned string for the init keyword for classes
+  ObjString* initString;
 
   // Head of the sorted linked list of open upvalues
   ObjUpvalue* openUpvalues;
