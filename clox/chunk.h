@@ -28,6 +28,8 @@ typedef enum {
   OP_CALL,
   // Directly invoking a method on a call
   OP_INVOKE,
+  // Directly invoking a super class method
+  OP_SUPER_INVOKE,
   // Define a closure that is wrapped around a function
   OP_CLOSURE,
   OP_CLOSE_UPVALUE,
@@ -46,6 +48,7 @@ typedef enum {
   OP_SET_UPVALUE,
   OP_GET_PROPERTY,
   OP_SET_PROPERTY,
+  OP_GET_SUPER,
   OP_EQUAL,
 
   // Arithmetic,
@@ -54,6 +57,7 @@ typedef enum {
   OP_MULTIPLY,
   OP_DIVIDE,
   OP_CLASS,
+  OP_INHERIT,
   OP_METHOD,
 } OpCode;
 
